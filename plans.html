@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GymFlow - Plans</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="../css/style.css">
+</head>
+
+<body>
+
+    <div class="app">
+
+        <aside class="sidebar">
+            <h2 class="logo"><i class="fas fa-dumbbell"></i>GymFlow</h2>
+            <nav class="menu">
+                <a href="dashboard.html"><i class="fas fa-gauge-high"></i><span>Dashboard</span></a>
+                <a href="members.html"><i class="fas fa-users"></i><span>Members</span></a>
+                <a href="trainers.html"><i class="fas fa-user-tie"></i><span>Trainers</span></a>
+                <a href="plans.html" class="active"><i class="fas fa-clipboard-list"></i><span>Plans</span></a>
+                <a href="payments.html"><i class="fas fa-money-bill-wave"></i><span>Payments</span></a>
+                <a href="attendance.html"><i class="fas fa-calendar-check"></i><span>Attendance</span></a>
+                <a href="reports.html"><i class="fas fa-chart-bar"></i><span>Reports</span></a>
+            </nav>
+        </aside>
+
+        <main class="main">
+            <header class="topbar">
+                <h3>Plans</h3>
+                <div class="topbar-right">
+                    <div class="user-info">
+                        <div class="user-avatar" id="userAvatar">A</div>
+                        <span class="user-name" id="userName">Admin</span>
+                    </div>
+                    <a href="../login.html" class="logout-btn"><i class="fas fa-right-from-bracket"></i>Logout</a>
+                </div>
+            </header>
+
+            <section class="content">
+
+                <div class="page-header">
+                    <div>
+                        <h1>Membership Plans</h1>
+                        <p>Create and manage your gym membership plans.</p>
+                    </div>
+                    <div class="badge-count" id="planCount">0 Plans</div>
+                </div>
+
+                <div class="form-box">
+                    <h3 id="formTitle"><i class="fas fa-plus-circle"></i> Add New Plan</h3>
+                    <div class="form-grid">
+                        <input type="text" id="planName" placeholder="Plan Name (e.g. Monthly)">
+                        <input type="number" id="planPrice" placeholder="Price (Rs)">
+                        <input type="text" id="planDuration" placeholder="Duration (e.g. 1 Month)">
+                    </div>
+                    <button type="button" id="submitBtn" onclick="addPlan()"><i class="fas fa-plus"></i> Add Plan</button>
+                    <button type="button" id="cancelBtn" class="delete-btn" onclick="cancelEdit()" style="display:none; margin-left: 10px;">
+                        <i class="fas fa-times"></i> Cancel
+                    </button>
+                </div>
+
+                <div class="table-wrap">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Plan Name</th>
+                                <th>Price</th>
+                                <th>Duration</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="plansList"></tbody>
+                    </table>
+                </div>
+
+            </section>
+        </main>
+
+    </div>
+
+    <script>
+        var editIndex = -1;
+
+        function getData(key) {
+            var data = localStorage.getItem(key);
+            if (data === null) return [];
+            return JSON.parse(data);
+        }
+
+        function saveData(key, value) {
+            localStorage.setItem(key, JSON.stringify(value));
+        }
+
+        function escapeHTML(str) {
+            return String(str)
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#39;");
+        }
+
+        function showToast(message, type) {
+            type = type || "success";
+            var toast = document.getElementById("gymToast");
+            if (!toast) {
+                toast = document.createElement("div");
+                toast.id = "gymToast";
+                document.body.appendChild(toast);
+            }
+            var icon = type === "success" ? "fa-circle-check" : "fa-circle-exclamation";
+            toast.className = "toast " + type;
+            toast.innerHTML = '<i class="fas ' + icon + '"></i><span>' + escapeHTML(message) + '</span>';
+            setTimeout(function () { toast.classList.add("show"); }, 10);
+            setTimeout(function () { toast.classList.remove("show"); }, 2800);
+        }
+
+        function openConfirm(message, onConfirm) {
+            var overlay = document.getElementById("gymModal");
+            if (!overlay) {
+                overlay = document.createElement("div");
+                overlay.id = "gymModal";
+                overlay.className = "modal-overlay";
+                overlay.innerHTML =
+                    '<div class="modal">' +
+                        '<i class="fas fa-triangle-exclamation"></i>' +
+                        '<h3>Are you sure?</h3>' +
+                        '<p id="gymModalMsg"></p>' +
+                        '<div class="modal-actions">' +
+                            '<button type="button" class="btn-cancel" id="gymCancel">Cancel</button>' +
+                            '<button type="button" class="btn-delete" id="gymConfirm">Delete</button>' +
+                        '</div>' +
+                    '</div>';
+                document.body.appendChild(overlay);
+            }
+            document.getElementById("gymModalMsg").innerText = message;
+            overlay.classList.add("show");
+            document.getElementById("gymCancel").onclick = function () {
+                overlay.classList.remove("show");
+            };
+            document.getElementById("gymConfirm").onclick = function () {
+                overlay.classList.remove("show");
+                onConfirm();
+            };
+        }
+
+        function loadUserInfo() {
+            var user = localStorage.getItem("gymUser");
+            if (!user) return;
+            var nameEl = document.getElementById("userName");
+            var avatarEl = document.getElementById("userAvatar");
+            if (nameEl) nameEl.innerText = user;
+            if (avatarEl) avatarEl.innerText = user.charAt(0).toUpperCase();
+        }
+
+        function addPlan() {
+            var name = document.getElementById("planName").value.trim();
+            var price = document.getElementById("planPrice").value.trim();
+            var duration = document.getElementById("planDuration").value.trim();
+
+            if (name === "" || price === "" || duration === "") {
+                showToast("Please fill all fields", "error");
+                return;
+            }
+
+            var plans = getData("gymPlans");
+
+            if (editIndex === -1) {
+                plans.push({ name: name, price: price, duration: duration });
+                showToast("Plan added successfully", "success");
+            } else {
+                plans[editIndex] = { name: name, price: price, duration: duration };
+                showToast("Plan updated successfully", "success");
+                editIndex = -1;
+            }
+
+            saveData("gymPlans", plans);
+            clearForm();
+            showPlans();
+        }
+
+        function editPlan(index) {
+            var plans = getData("gymPlans");
+            var p = plans[index];
+
+            document.getElementById("planName").value = p.name;
+            document.getElementById("planPrice").value = p.price;
+            document.getElementById("planDuration").value = p.duration;
+
+            document.getElementById("formTitle").innerHTML = '<i class="fas fa-pen"></i> Edit Plan';
+            document.getElementById("submitBtn").innerHTML = '<i class="fas fa-check"></i> Update Plan';
+            document.getElementById("submitBtn").className = "btn-update";
+            document.getElementById("cancelBtn").style.display = "inline-flex";
+
+            editIndex = index;
+            window.scrollTo({ top: 0, behavior: "smooth" });
+        }
+
+        function cancelEdit() {
+            editIndex = -1;
+            clearForm();
+            showToast("Edit cancelled", "error");
+        }
+
+        function clearForm() {
+            document.getElementById("planName").value = "";
+            document.getElementById("planPrice").value = "";
+            document.getElementById("planDuration").value = "";
+
+            document.getElementById("formTitle").innerHTML = '<i class="fas fa-plus-circle"></i> Add New Plan';
+            document.getElementById("submitBtn").innerHTML = '<i class="fas fa-plus"></i> Add Plan';
+            document.getElementById("submitBtn").className = "";
+            document.getElementById("cancelBtn").style.display = "none";
+        }
+
+        function deletePlan(index) {
+            openConfirm("This plan will be permanently removed.", function () {
+                var plans = getData("gymPlans");
+                plans.splice(index, 1);
+                saveData("gymPlans", plans);
+                showToast("Plan deleted", "success");
+
+                if (editIndex === index) {
+                    cancelEdit();
+                } else if (editIndex > index) {
+                    editIndex--;
+                }
+
+                showPlans();
+            });
+        }
+
+        function showPlans() {
+            var list = document.getElementById("plansList");
+            var plans = getData("gymPlans");
+            list.innerHTML = "";
+
+            document.getElementById("planCount").innerText = plans.length + " Plans";
+
+            if (plans.length === 0) {
+                list.innerHTML = '<tr><td colspan="5">' +
+                    '<div class="empty-state">' +
+                    '<i class="fas fa-clipboard-list"></i>' +
+                    '<h4>No plans yet</h4>' +
+                    '<p>Create your first membership plan using the form above.</p>' +
+                    '</div></td></tr>';
+                return;
+            }
+
+            for (var i = 0; i < plans.length; i++) {
+                var p = plans[i];
+                var row = document.createElement("tr");
+                row.innerHTML =
+                    "<td>" + (i + 1) + "</td>" +
+                    "<td><strong>" + escapeHTML(p.name) + "</strong></td>" +
+                    "<td>Rs " + escapeHTML(p.price) + "</td>" +
+                    "<td>" + escapeHTML(p.duration) + "</td>" +
+                    "<td><div class='action-cell'>" +
+                    "<button class='edit-btn' onclick='editPlan(" + i + ")'>" +
+                    "<i class='fas fa-pen'></i> Edit</button>" +
+                    "<button class='delete-btn' onclick='deletePlan(" + i + ")'>" +
+                    "<i class='fas fa-trash'></i> Delete</button>" +
+                    "</div></td>";
+                list.appendChild(row);
+            }
+        }
+
+        loadUserInfo();
+        showPlans();
+    </script>
+
+</body>
+
+</html>

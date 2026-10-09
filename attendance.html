@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GymFlow - Attendance</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="../css/style.css">
+</head>
+
+<body>
+
+    <div class="app">
+
+        <aside class="sidebar">
+            <h2 class="logo"><i class="fas fa-dumbbell"></i>GymFlow</h2>
+            <nav class="menu">
+                <a href="dashboard.html"><i class="fas fa-gauge-high"></i><span>Dashboard</span></a>
+                <a href="members.html"><i class="fas fa-users"></i><span>Members</span></a>
+                <a href="trainers.html"><i class="fas fa-user-tie"></i><span>Trainers</span></a>
+                <a href="plans.html"><i class="fas fa-clipboard-list"></i><span>Plans</span></a>
+                <a href="payments.html"><i class="fas fa-money-bill-wave"></i><span>Payments</span></a>
+                <a href="attendance.html" class="active"><i class="fas fa-calendar-check"></i><span>Attendance</span></a>
+                <a href="reports.html"><i class="fas fa-chart-bar"></i><span>Reports</span></a>
+            </nav>
+        </aside>
+
+        <main class="main">
+            <header class="topbar">
+                <h3>Attendance</h3>
+                <div class="topbar-right">
+                    <div class="user-info">
+                        <div class="user-avatar" id="userAvatar">A</div>
+                        <span class="user-name" id="userName">Admin</span>
+                    </div>
+                    <a href="../login.html" class="logout-btn"><i class="fas fa-right-from-bracket"></i>Logout</a>
+                </div>
+            </header>
+
+            <section class="content">
+
+                <div class="page-header">
+                    <div>
+                        <h1>Daily Attendance</h1>
+                        <p>Mark today's attendance for members who visited the gym.</p>
+                    </div>
+                    <div class="badge-count" id="todayCount">0 Today</div>
+                </div>
+
+                <div class="form-box">
+                    <h3 id="formTitle"><i class="fas fa-clipboard-check"></i> Mark Attendance</h3>
+                    <div class="form-grid">
+                        <select id="attendanceMember">
+                            <option value="">Select Member</option>
+                        </select>
+                        <select id="attendanceStatus">
+                            <option value="Present">Present</option>
+                            <option value="Absent">Absent</option>
+                        </select>
+                        <input type="date" id="attendanceDate">
+                    </div>
+                    <button type="button" id="submitBtn" onclick="markAttendance()"><i class="fas fa-check"></i> Mark Attendance</button>
+                    <button type="button" id="cancelBtn" class="delete-btn" onclick="cancelEdit()" style="display:none; margin-left: 10px;">
+                        <i class="fas fa-times"></i> Cancel
+                    </button>
+                </div>
+
+                <div class="table-wrap">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Member</th>
+                                <th>Date</th>
+                                <th>Status</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="attendanceList"></tbody>
+                    </table>
+                </div>
+
+            </section>
+        </main>
+
+    </div>
+
+    <script>
+        var editIndex = -1;
+
+        function getData(key) {
+            var data = localStorage.getItem(key);
+            if (data === null) return [];
+            return JSON.parse(data);
+        }
+
+        function saveData(key, value) {
+            localStorage.setItem(key, JSON.stringify(value));
+        }
+
+        function escapeHTML(str) {
+            return String(str)
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#39;");
+        }
+
+        function showToast(message, type) {
+            type = type || "success";
+            var toast = document.getElementById("gymToast");
+            if (!toast) {
+                toast = document.createElement("div");
+                toast.id = "gymToast";
+                document.body.appendChild(toast);
+            }
+            var icon = type === "success" ? "fa-circle-check" : "fa-circle-exclamation";
+            toast.className = "toast " + type;
+            toast.innerHTML = '<i class="fas ' + icon + '"></i><span>' + escapeHTML(message) + '</span>';
+            setTimeout(function () { toast.classList.add("show"); }, 10);
+            setTimeout(function () { toast.classList.remove("show"); }, 2800);
+        }
+
+        function openConfirm(message, onConfirm) {
+            var overlay = document.getElementById("gymModal");
+            if (!overlay) {
+                overlay = document.createElement("div");
+                overlay.id = "gymModal";
+                overlay.className = "modal-overlay";
+                overlay.innerHTML =
+                    '<div class="modal">' +
+                        '<i class="fas fa-triangle-exclamation"></i>' +
+                        '<h3>Are you sure?</h3>' +
+                        '<p id="gymModalMsg"></p>' +
+                        '<div class="modal-actions">' +
+                            '<button type="button" class="btn-cancel" id="gymCancel">Cancel</button>' +
+                            '<button type="button" class="btn-delete" id="gymConfirm">Delete</button>' +
+                        '</div>' +
+                    '</div>';
+                document.body.appendChild(overlay);
+            }
+            document.getElementById("gymModalMsg").innerText = message;
+            overlay.classList.add("show");
+            document.getElementById("gymCancel").onclick = function () {
+                overlay.classList.remove("show");
+            };
+            document.getElementById("gymConfirm").onclick = function () {
+                overlay.classList.remove("show");
+                onConfirm();
+            };
+        }
+
+        function loadUserInfo() {
+            var user = localStorage.getItem("gymUser");
+            if (!user) return;
+            var nameEl = document.getElementById("userName");
+            var avatarEl = document.getElementById("userAvatar");
+            if (nameEl) nameEl.innerText = user;
+            if (avatarEl) avatarEl.innerText = user.charAt(0).toUpperCase();
+        }
+
+        function loadMembers() {
+            var members = getData("gymMembers");
+            var select = document.getElementById("attendanceMember");
+            select.innerHTML = "<option value=''>Select Member</option>";
+
+            for (var i = 0; i < members.length; i++) {
+                var opt = document.createElement("option");
+                opt.value = members[i].name;
+                opt.innerText = members[i].name;
+                select.appendChild(opt);
+            }
+        }
+
+        function setTodayDate() {
+            var today = new Date();
+            var m = today.getMonth() + 1;
+            var d = today.getDate();
+            if (m < 10) m = "0" + m;
+            if (d < 10) d = "0" + d;
+            document.getElementById("attendanceDate").value = today.getFullYear() + "-" + m + "-" + d;
+        }
+
+        function markAttendance() {
+            var member = document.getElementById("attendanceMember").value;
+            var status = document.getElementById("attendanceStatus").value;
+            var date = document.getElementById("attendanceDate").value;
+
+            if (member === "" || date === "") {
+                showToast("Please select member and date", "error");
+                return;
+            }
+
+            var attendance = getData("gymAttendance");
+
+            if (editIndex === -1) {
+                for (var i = 0; i < attendance.length; i++) {
+                    if (attendance[i].member === member && attendance[i].date === date) {
+                        showToast("Already marked for this date", "error");
+                        return;
+                    }
+                }
+                attendance.push({ member: member, date: date, status: status });
+                showToast("Attendance marked", "success");
+            } else {
+                attendance[editIndex] = { member: member, date: date, status: status };
+                showToast("Attendance updated", "success");
+                editIndex = -1;
+            }
+
+            saveData("gymAttendance", attendance);
+            clearForm();
+            showAttendance();
+        }
+
+        function editAttendance(index) {
+            var attendance = getData("gymAttendance");
+            var a = attendance[index];
+
+            document.getElementById("attendanceMember").value = a.member;
+            document.getElementById("attendanceStatus").value = a.status;
+            document.getElementById("attendanceDate").value = a.date;
+
+            document.getElementById("formTitle").innerHTML = '<i class="fas fa-pen"></i> Edit Attendance';
+            document.getElementById("submitBtn").innerHTML = '<i class="fas fa-check"></i> Update Attendance';
+            document.getElementById("submitBtn").className = "btn-update";
+            document.getElementById("cancelBtn").style.display = "inline-flex";
+
+            editIndex = index;
+            window.scrollTo({ top: 0, behavior: "smooth" });
+        }
+
+        function cancelEdit() {
+            editIndex = -1;
+            clearForm();
+            showToast("Edit cancelled", "error");
+        }
+
+        function clearForm() {
+            document.getElementById("attendanceMember").value = "";
+            document.getElementById("attendanceStatus").value = "Present";
+            setTodayDate();
+
+            document.getElementById("formTitle").innerHTML = '<i class="fas fa-clipboard-check"></i> Mark Attendance';
+            document.getElementById("submitBtn").innerHTML = '<i class="fas fa-check"></i> Mark Attendance';
+            document.getElementById("submitBtn").className = "";
+            document.getElementById("cancelBtn").style.display = "none";
+        }
+
+        function deleteAttendance(index) {
+            openConfirm("This attendance record will be permanently removed.", function () {
+                var attendance = getData("gymAttendance");
+                attendance.splice(index, 1);
+                saveData("gymAttendance", attendance);
+                showToast("Record deleted", "success");
+
+                if (editIndex === index) {
+                    cancelEdit();
+                } else if (editIndex > index) {
+                    editIndex--;
+                }
+
+                showAttendance();
+            });
+        }
+
+        function showAttendance() {
+            var list = document.getElementById("attendanceList");
+            var attendance = getData("gymAttendance");
+            list.innerHTML = "";
+
+            var today = new Date();
+            var m = today.getMonth() + 1;
+            var d = today.getDate();
+            if (m < 10) m = "0" + m;
+            if (d < 10) d = "0" + d;
+            var todayDate = today.getFullYear() + "-" + m + "-" + d;
+
+            var todayTotal = 0;
+            for (var x = 0; x < attendance.length; x++) {
+                if (attendance[x].date === todayDate) todayTotal++;
+            }
+            document.getElementById("todayCount").innerText = todayTotal + " Today";
+
+            if (attendance.length === 0) {
+                list.innerHTML = '<tr><td colspan="5">' +
+                    '<div class="empty-state">' +
+                    '<i class="fas fa-calendar-check"></i>' +
+                    '<h4>No attendance records yet</h4>' +
+                    '<p>Mark your first attendance using the form above.</p>' +
+                    '</div></td></tr>';
+                return;
+            }
+
+            var reversed = attendance.slice().reverse();
+
+            for (var i = 0; i < reversed.length; i++) {
+                var a = reversed[i];
+                var realIndex = attendance.length - 1 - i;
+                var row = document.createElement("tr");
+                row.innerHTML =
+                    "<td>" + (i + 1) + "</td>" +
+                    "<td><strong>" + escapeHTML(a.member) + "</strong></td>" +
+                    "<td>" + escapeHTML(a.date) + "</td>" +
+                    "<td><span class='tag'>" + escapeHTML(a.status) + "</span></td>" +
+                    "<td><div class='action-cell'>" +
+                    "<button class='edit-btn' onclick='editAttendance(" + realIndex + ")'>" +
+                    "<i class='fas fa-pen'></i> Edit</button>" +
+                    "<button class='delete-btn' onclick='deleteAttendance(" + realIndex + ")'>" +
+                    "<i class='fas fa-trash'></i> Delete</button>" +
+                    "</div></td>";
+                list.appendChild(row);
+            }
+        }
+
+        loadUserInfo();
+        loadMembers();
+        setTodayDate();
+        showAttendance();
+    </script>
+
+</body>
+
+</html>

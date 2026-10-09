@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GymFlow - Members</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="../css/style.css">
+</head>
+
+<body>
+
+    <div class="app">
+
+        <aside class="sidebar">
+            <h2 class="logo"><i class="fas fa-dumbbell"></i>GymFlow</h2>
+            <nav class="menu">
+                <a href="dashboard.html"><i class="fas fa-gauge-high"></i><span>Dashboard</span></a>
+                <a href="members.html" class="active"><i class="fas fa-users"></i><span>Members</span></a>
+                <a href="trainers.html"><i class="fas fa-user-tie"></i><span>Trainers</span></a>
+                <a href="plans.html"><i class="fas fa-clipboard-list"></i><span>Plans</span></a>
+                <a href="payments.html"><i class="fas fa-money-bill-wave"></i><span>Payments</span></a>
+                <a href="attendance.html"><i class="fas fa-calendar-check"></i><span>Attendance</span></a>
+                <a href="reports.html"><i class="fas fa-chart-bar"></i><span>Reports</span></a>
+            </nav>
+        </aside>
+
+        <main class="main">
+            <header class="topbar">
+                <h3>Members</h3>
+                <div class="topbar-right">
+                    <div class="user-info">
+                        <div class="user-avatar" id="userAvatar">A</div>
+                        <span class="user-name" id="userName">Admin</span>
+                    </div>
+                    <a href="../login.html" class="logout-btn"><i class="fas fa-right-from-bracket"></i>Logout</a>
+                </div>
+            </header>
+
+            <section class="content">
+
+                <div class="page-header">
+                    <div>
+                        <h1>Gym Members</h1>
+                        <p>Manage your members, add new entries, and track their plans.</p>
+                    </div>
+                    <div class="badge-count" id="memberCount">0 Members</div>
+                </div>
+
+                <div class="form-box">
+                    <h3 id="formTitle"><i class="fas fa-user-plus"></i> Add New Member</h3>
+                    <div class="form-grid">
+                        <input type="text" id="memberName" placeholder="Member Name">
+                        <input type="text" id="memberPhone" placeholder="Phone Number">
+                        <input type="text" id="memberPlan" placeholder="Plan (Monthly / Yearly)">
+                    </div>
+                    <button type="button" id="submitBtn" onclick="addMember()"><i class="fas fa-plus"></i> Add Member</button>
+                    <button type="button" id="cancelBtn" class="delete-btn" onclick="cancelEdit()" style="display:none; margin-left: 10px;">
+                        <i class="fas fa-times"></i> Cancel
+                    </button>
+                </div>
+
+                <div class="search-box">
+                    <i class="fas fa-search"></i>
+                    <input type="text" id="memberSearch" placeholder="Search members by name or phone..." oninput="showMembers()">
+                </div>
+
+                <div class="table-wrap">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Name</th>
+                                <th>Phone</th>
+                                <th>Plan</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="membersList"></tbody>
+                    </table>
+                </div>
+
+            </section>
+        </main>
+
+    </div>
+
+    <script>
+        var editIndex = -1;
+
+        function getData(key) {
+            var data = localStorage.getItem(key);
+            if (data === null) return [];
+            return JSON.parse(data);
+        }
+
+        function saveData(key, value) {
+            localStorage.setItem(key, JSON.stringify(value));
+        }
+
+        function escapeHTML(str) {
+            return String(str)
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#39;");
+        }
+
+        function showToast(message, type) {
+            type = type || "success";
+            var toast = document.getElementById("gymToast");
+            if (!toast) {
+                toast = document.createElement("div");
+                toast.id = "gymToast";
+                document.body.appendChild(toast);
+            }
+            var icon = type === "success" ? "fa-circle-check" : "fa-circle-exclamation";
+            toast.className = "toast " + type;
+            toast.innerHTML = '<i class="fas ' + icon + '"></i><span>' + escapeHTML(message) + '</span>';
+            setTimeout(function () { toast.classList.add("show"); }, 10);
+            setTimeout(function () { toast.classList.remove("show"); }, 2800);
+        }
+
+        function openConfirm(message, onConfirm) {
+            var overlay = document.getElementById("gymModal");
+            if (!overlay) {
+                overlay = document.createElement("div");
+                overlay.id = "gymModal";
+                overlay.className = "modal-overlay";
+                overlay.innerHTML =
+                    '<div class="modal">' +
+                        '<i class="fas fa-triangle-exclamation"></i>' +
+                        '<h3>Are you sure?</h3>' +
+                        '<p id="gymModalMsg"></p>' +
+                        '<div class="modal-actions">' +
+                            '<button type="button" class="btn-cancel" id="gymCancel">Cancel</button>' +
+                            '<button type="button" class="btn-delete" id="gymConfirm">Delete</button>' +
+                        '</div>' +
+                    '</div>';
+                document.body.appendChild(overlay);
+            }
+            document.getElementById("gymModalMsg").innerText = message;
+            overlay.classList.add("show");
+            document.getElementById("gymCancel").onclick = function () {
+                overlay.classList.remove("show");
+            };
+            document.getElementById("gymConfirm").onclick = function () {
+                overlay.classList.remove("show");
+                onConfirm();
+            };
+        }
+
+        function loadUserInfo() {
+            var user = localStorage.getItem("gymUser");
+            if (!user) return;
+            var nameEl = document.getElementById("userName");
+            var avatarEl = document.getElementById("userAvatar");
+            if (nameEl) nameEl.innerText = user;
+            if (avatarEl) avatarEl.innerText = user.charAt(0).toUpperCase();
+        }
+
+        function addMember() {
+            var name = document.getElementById("memberName").value.trim();
+            var phone = document.getElementById("memberPhone").value.trim();
+            var plan = document.getElementById("memberPlan").value.trim();
+
+            if (name === "" || phone === "" || plan === "") {
+                showToast("Please fill all fields", "error");
+                return;
+            }
+
+            var members = getData("gymMembers");
+
+            if (editIndex === -1) {
+                members.push({ name: name, phone: phone, plan: plan });
+                showToast("Member added successfully", "success");
+            } else {
+                members[editIndex] = { name: name, phone: phone, plan: plan };
+                showToast("Member updated successfully", "success");
+                editIndex = -1;
+            }
+
+            saveData("gymMembers", members);
+            clearForm();
+            showMembers();
+        }
+
+        function editMember(index) {
+            var members = getData("gymMembers");
+            var m = members[index];
+
+            document.getElementById("memberName").value = m.name;
+            document.getElementById("memberPhone").value = m.phone;
+            document.getElementById("memberPlan").value = m.plan;
+
+            document.getElementById("formTitle").innerHTML = '<i class="fas fa-user-pen"></i> Edit Member';
+            document.getElementById("submitBtn").innerHTML = '<i class="fas fa-check"></i> Update Member';
+            document.getElementById("submitBtn").className = "btn-update";
+            document.getElementById("cancelBtn").style.display = "inline-flex";
+
+            editIndex = index;
+
+            window.scrollTo({ top: 0, behavior: "smooth" });
+        }
+
+        function cancelEdit() {
+            editIndex = -1;
+            clearForm();
+            showToast("Edit cancelled", "error");
+        }
+
+        function clearForm() {
+            document.getElementById("memberName").value = "";
+            document.getElementById("memberPhone").value = "";
+            document.getElementById("memberPlan").value = "";
+
+            document.getElementById("formTitle").innerHTML = '<i class="fas fa-user-plus"></i> Add New Member';
+            document.getElementById("submitBtn").innerHTML = '<i class="fas fa-plus"></i> Add Member';
+            document.getElementById("submitBtn").className = "";
+            document.getElementById("cancelBtn").style.display = "none";
+        }
+
+        function deleteMember(index) {
+            openConfirm("This member will be permanently removed.", function () {
+                var members = getData("gymMembers");
+                members.splice(index, 1);
+                saveData("gymMembers", members);
+                showToast("Member deleted", "success");
+
+                if (editIndex === index) {
+                    cancelEdit();
+                } else if (editIndex > index) {
+                    editIndex--;
+                }
+
+                showMembers();
+            });
+        }
+
+        function showMembers() {
+            var list = document.getElementById("membersList");
+            var members = getData("gymMembers");
+            var search = document.getElementById("memberSearch").value.toLowerCase();
+
+            var filtered = [];
+            for (var i = 0; i < members.length; i++) {
+                var m = members[i];
+                if (m.name.toLowerCase().indexOf(search) !== -1 ||
+                    m.phone.toLowerCase().indexOf(search) !== -1) {
+                    filtered.push({ member: m, originalIndex: i });
+                }
+            }
+
+            document.getElementById("memberCount").innerText = members.length + " Members";
+            list.innerHTML = "";
+
+            if (filtered.length === 0) {
+                list.innerHTML = '<tr><td colspan="5">' +
+                    '<div class="empty-state">' +
+                    '<i class="fas fa-users"></i>' +
+                    '<h4>' + (members.length === 0 ? 'No members yet' : 'No results found') + '</h4>' +
+                    '<p>' + (members.length === 0 ? 'Add your first member using the form above.' : 'Try a different search term.') + '</p>' +
+                    '</div></td></tr>';
+                return;
+            }
+
+            for (var j = 0; j < filtered.length; j++) {
+                var item = filtered[j];
+                var m2 = item.member;
+                var row = document.createElement("tr");
+                row.innerHTML =
+                    "<td>" + (j + 1) + "</td>" +
+                    "<td><strong>" + escapeHTML(m2.name) + "</strong></td>" +
+                    "<td>" + escapeHTML(m2.phone) + "</td>" +
+                    "<td><span class='tag'>" + escapeHTML(m2.plan) + "</span></td>" +
+                    "<td><div class='action-cell'>" +
+                    "<button class='edit-btn' onclick='editMember(" + item.originalIndex + ")'>" +
+                    "<i class='fas fa-pen'></i> Edit</button>" +
+                    "<button class='delete-btn' onclick='deleteMember(" + item.originalIndex + ")'>" +
+                    "<i class='fas fa-trash'></i> Delete</button>" +
+                    "</div></td>";
+                list.appendChild(row);
+            }
+        }
+
+        loadUserInfo();
+        showMembers();
+    </script>
+
+</body>
+
+</html>

@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GymFlow - Payments</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="../css/style.css">
+</head>
+
+<body>
+
+    <div class="app">
+
+        <aside class="sidebar">
+            <h2 class="logo"><i class="fas fa-dumbbell"></i>GymFlow</h2>
+            <nav class="menu">
+                <a href="dashboard.html"><i class="fas fa-gauge-high"></i><span>Dashboard</span></a>
+                <a href="members.html"><i class="fas fa-users"></i><span>Members</span></a>
+                <a href="trainers.html"><i class="fas fa-user-tie"></i><span>Trainers</span></a>
+                <a href="plans.html"><i class="fas fa-clipboard-list"></i><span>Plans</span></a>
+                <a href="payments.html" class="active"><i class="fas fa-money-bill-wave"></i><span>Payments</span></a>
+                <a href="attendance.html"><i class="fas fa-calendar-check"></i><span>Attendance</span></a>
+                <a href="reports.html"><i class="fas fa-chart-bar"></i><span>Reports</span></a>
+            </nav>
+        </aside>
+
+        <main class="main">
+            <header class="topbar">
+                <h3>Payments</h3>
+                <div class="topbar-right">
+                    <div class="user-info">
+                        <div class="user-avatar" id="userAvatar">A</div>
+                        <span class="user-name" id="userName">Admin</span>
+                    </div>
+                    <a href="../login.html" class="logout-btn"><i class="fas fa-right-from-bracket"></i>Logout</a>
+                </div>
+            </header>
+
+            <section class="content">
+
+                <div class="page-header">
+                    <div>
+                        <h1>Payment Records</h1>
+                        <p>Record payments made by members and track your income.</p>
+                    </div>
+                    <div class="badge-count" id="totalIncomeBadge">Rs 0 Total</div>
+                </div>
+
+                <div class="form-box">
+                    <h3 id="formTitle"><i class="fas fa-money-bill-transfer"></i> Add New Payment</h3>
+                    <div class="form-grid">
+                        <select id="paymentMember">
+                            <option value="">Select Member</option>
+                        </select>
+                        <select id="paymentPlan">
+                            <option value="">Select Plan</option>
+                        </select>
+                        <input type="number" id="paymentAmount" placeholder="Amount (Rs)">
+                        <input type="date" id="paymentDate">
+                    </div>
+                    <button type="button" id="submitBtn" onclick="addPayment()"><i class="fas fa-plus"></i> Add Payment</button>
+                    <button type="button" id="cancelBtn" class="delete-btn" onclick="cancelEdit()" style="display:none; margin-left: 10px;">
+                        <i class="fas fa-times"></i> Cancel
+                    </button>
+                </div>
+
+                <div class="table-wrap">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Member</th>
+                                <th>Plan</th>
+                                <th>Amount</th>
+                                <th>Date</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="paymentsList"></tbody>
+                    </table>
+                </div>
+
+            </section>
+        </main>
+
+    </div>
+
+    <script>
+        var editIndex = -1;
+
+        function getData(key) {
+            var data = localStorage.getItem(key);
+            if (data === null) return [];
+            return JSON.parse(data);
+        }
+
+        function saveData(key, value) {
+            localStorage.setItem(key, JSON.stringify(value));
+        }
+
+        function escapeHTML(str) {
+            return String(str)
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#39;");
+        }
+
+        function showToast(message, type) {
+            type = type || "success";
+            var toast = document.getElementById("gymToast");
+            if (!toast) {
+                toast = document.createElement("div");
+                toast.id = "gymToast";
+                document.body.appendChild(toast);
+            }
+            var icon = type === "success" ? "fa-circle-check" : "fa-circle-exclamation";
+            toast.className = "toast " + type;
+            toast.innerHTML = '<i class="fas ' + icon + '"></i><span>' + escapeHTML(message) + '</span>';
+            setTimeout(function () { toast.classList.add("show"); }, 10);
+            setTimeout(function () { toast.classList.remove("show"); }, 2800);
+        }
+
+        function openConfirm(message, onConfirm) {
+            var overlay = document.getElementById("gymModal");
+            if (!overlay) {
+                overlay = document.createElement("div");
+                overlay.id = "gymModal";
+                overlay.className = "modal-overlay";
+                overlay.innerHTML =
+                    '<div class="modal">' +
+                        '<i class="fas fa-triangle-exclamation"></i>' +
+                        '<h3>Are you sure?</h3>' +
+                        '<p id="gymModalMsg"></p>' +
+                        '<div class="modal-actions">' +
+                            '<button type="button" class="btn-cancel" id="gymCancel">Cancel</button>' +
+                            '<button type="button" class="btn-delete" id="gymConfirm">Delete</button>' +
+                        '</div>' +
+                    '</div>';
+                document.body.appendChild(overlay);
+            }
+            document.getElementById("gymModalMsg").innerText = message;
+            overlay.classList.add("show");
+            document.getElementById("gymCancel").onclick = function () {
+                overlay.classList.remove("show");
+            };
+            document.getElementById("gymConfirm").onclick = function () {
+                overlay.classList.remove("show");
+                onConfirm();
+            };
+        }
+
+        function loadUserInfo() {
+            var user = localStorage.getItem("gymUser");
+            if (!user) return;
+            var nameEl = document.getElementById("userName");
+            var avatarEl = document.getElementById("userAvatar");
+            if (nameEl) nameEl.innerText = user;
+            if (avatarEl) avatarEl.innerText = user.charAt(0).toUpperCase();
+        }
+
+        function loadDropdowns() {
+            var members = getData("gymMembers");
+            var memberSelect = document.getElementById("paymentMember");
+            memberSelect.innerHTML = "<option value=''>Select Member</option>";
+
+            for (var i = 0; i < members.length; i++) {
+                var opt = document.createElement("option");
+                opt.value = members[i].name;
+                opt.innerText = members[i].name;
+                memberSelect.appendChild(opt);
+            }
+
+            var plans = getData("gymPlans");
+            var planSelect = document.getElementById("paymentPlan");
+            planSelect.innerHTML = "<option value=''>Select Plan</option>";
+
+            for (var j = 0; j < plans.length; j++) {
+                var opt2 = document.createElement("option");
+                opt2.value = plans[j].name;
+                opt2.innerText = plans[j].name + " (Rs " + plans[j].price + ")";
+                planSelect.appendChild(opt2);
+            }
+        }
+
+        document.getElementById("paymentPlan").addEventListener("change", function () {
+            if (editIndex !== -1) return;
+            var selected = this.value;
+            var plans = getData("gymPlans");
+            for (var i = 0; i < plans.length; i++) {
+                if (plans[i].name === selected) {
+                    document.getElementById("paymentAmount").value = plans[i].price;
+                }
+            }
+        });
+
+        function addPayment() {
+            var member = document.getElementById("paymentMember").value;
+            var plan = document.getElementById("paymentPlan").value;
+            var amount = document.getElementById("paymentAmount").value;
+            var date = document.getElementById("paymentDate").value;
+
+            if (member === "" || plan === "" || amount === "" || date === "") {
+                showToast("Please fill all fields", "error");
+                return;
+            }
+
+            var payments = getData("gymPayments");
+
+            if (editIndex === -1) {
+                payments.push({ member: member, plan: plan, amount: amount, date: date });
+                showToast("Payment recorded successfully", "success");
+            } else {
+                payments[editIndex] = { member: member, plan: plan, amount: amount, date: date };
+                showToast("Payment updated successfully", "success");
+                editIndex = -1;
+            }
+
+            saveData("gymPayments", payments);
+            clearForm();
+            showPayments();
+        }
+
+        function editPayment(index) {
+            var payments = getData("gymPayments");
+            var p = payments[index];
+
+            document.getElementById("paymentMember").value = p.member;
+            document.getElementById("paymentPlan").value = p.plan;
+            document.getElementById("paymentAmount").value = p.amount;
+            document.getElementById("paymentDate").value = p.date;
+
+            document.getElementById("formTitle").innerHTML = '<i class="fas fa-pen"></i> Edit Payment';
+            document.getElementById("submitBtn").innerHTML = '<i class="fas fa-check"></i> Update Payment';
+            document.getElementById("submitBtn").className = "btn-update";
+            document.getElementById("cancelBtn").style.display = "inline-flex";
+
+            editIndex = index;
+            window.scrollTo({ top: 0, behavior: "smooth" });
+        }
+
+        function cancelEdit() {
+            editIndex = -1;
+            clearForm();
+            showToast("Edit cancelled", "error");
+        }
+
+        function clearForm() {
+            document.getElementById("paymentMember").value = "";
+            document.getElementById("paymentPlan").value = "";
+            document.getElementById("paymentAmount").value = "";
+            document.getElementById("paymentDate").value = "";
+
+            document.getElementById("formTitle").innerHTML = '<i class="fas fa-money-bill-transfer"></i> Add New Payment';
+            document.getElementById("submitBtn").innerHTML = '<i class="fas fa-plus"></i> Add Payment';
+            document.getElementById("submitBtn").className = "";
+            document.getElementById("cancelBtn").style.display = "none";
+        }
+
+        function deletePayment(index) {
+            openConfirm("This payment record will be permanently removed.", function () {
+                var payments = getData("gymPayments");
+                payments.splice(index, 1);
+                saveData("gymPayments", payments);
+                showToast("Payment deleted", "success");
+
+                if (editIndex === index) {
+                    cancelEdit();
+                } else if (editIndex > index) {
+                    editIndex--;
+                }
+
+                showPayments();
+            });
+        }
+
+        function showPayments() {
+            var list = document.getElementById("paymentsList");
+            var payments = getData("gymPayments");
+            list.innerHTML = "";
+
+            var total = 0;
+
+            if (payments.length === 0) {
+                list.innerHTML = '<tr><td colspan="6">' +
+                    '<div class="empty-state">' +
+                    '<i class="fas fa-money-bill-wave"></i>' +
+                    '<h4>No payments yet</h4>' +
+                    '<p>Record your first payment using the form above.</p>' +
+                    '</div></td></tr>';
+                document.getElementById("totalIncomeBadge").innerText = "Rs 0 Total";
+                return;
+            }
+
+            var reversed = payments.slice().reverse();
+
+            for (var i = 0; i < payments.length; i++) {
+                total = total + Number(payments[i].amount);
+            }
+
+            document.getElementById("totalIncomeBadge").innerText = "Rs " + total + " Total";
+
+            for (var j = 0; j < reversed.length; j++) {
+                var p = reversed[j];
+                var realIndex = payments.length - 1 - j;
+                var row = document.createElement("tr");
+                row.innerHTML =
+                    "<td>" + (j + 1) + "</td>" +
+                    "<td><strong>" + escapeHTML(p.member) + "</strong></td>" +
+                    "<td><span class='tag'>" + escapeHTML(p.plan) + "</span></td>" +
+                    "<td>Rs " + escapeHTML(p.amount) + "</td>" +
+                    "<td>" + escapeHTML(p.date) + "</td>" +
+                    "<td><div class='action-cell'>" +
+                    "<button class='edit-btn' onclick='editPayment(" + realIndex + ")'>" +
+                    "<i class='fas fa-pen'></i> Edit</button>" +
+                    "<button class='delete-btn' onclick='deletePayment(" + realIndex + ")'>" +
+                    "<i class='fas fa-trash'></i> Delete</button>" +
+                    "</div></td>";
+                list.appendChild(row);
+            }
+        }
+
+        loadUserInfo();
+        loadDropdowns();
+        showPayments();
+    </script>
+
+</body>
+
+</html>

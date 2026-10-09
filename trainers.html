@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GymFlow - Trainers</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="../css/style.css">
+</head>
+
+<body>
+
+    <div class="app">
+
+        <aside class="sidebar">
+            <h2 class="logo"><i class="fas fa-dumbbell"></i>GymFlow</h2>
+            <nav class="menu">
+                <a href="dashboard.html"><i class="fas fa-gauge-high"></i><span>Dashboard</span></a>
+                <a href="members.html"><i class="fas fa-users"></i><span>Members</span></a>
+                <a href="trainers.html" class="active"><i class="fas fa-user-tie"></i><span>Trainers</span></a>
+                <a href="plans.html"><i class="fas fa-clipboard-list"></i><span>Plans</span></a>
+                <a href="payments.html"><i class="fas fa-money-bill-wave"></i><span>Payments</span></a>
+                <a href="attendance.html"><i class="fas fa-calendar-check"></i><span>Attendance</span></a>
+                <a href="reports.html"><i class="fas fa-chart-bar"></i><span>Reports</span></a>
+            </nav>
+        </aside>
+
+        <main class="main">
+            <header class="topbar">
+                <h3>Trainers</h3>
+                <div class="topbar-right">
+                    <div class="user-info">
+                        <div class="user-avatar" id="userAvatar">A</div>
+                        <span class="user-name" id="userName">Admin</span>
+                    </div>
+                    <a href="../login.html" class="logout-btn"><i class="fas fa-right-from-bracket"></i>Logout</a>
+                </div>
+            </header>
+
+            <section class="content">
+
+                <div class="page-header">
+                    <div>
+                        <h1>Gym Trainers</h1>
+                        <p>Manage your gym trainers and their specialties.</p>
+                    </div>
+                    <div class="badge-count" id="trainerCount">0 Trainers</div>
+                </div>
+
+                <div class="form-box">
+                    <h3 id="formTitle"><i class="fas fa-user-plus"></i> Add New Trainer</h3>
+                    <div class="form-grid">
+                        <input type="text" id="trainerName" placeholder="Trainer Name">
+                        <input type="text" id="trainerPhone" placeholder="Phone Number">
+                        <input type="text" id="trainerSpecialty" placeholder="Specialty (e.g. Cardio)">
+                    </div>
+                    <button type="button" id="submitBtn" onclick="addTrainer()"><i class="fas fa-plus"></i> Add Trainer</button>
+                    <button type="button" id="cancelBtn" class="delete-btn" onclick="cancelEdit()" style="display:none; margin-left: 10px;">
+                        <i class="fas fa-times"></i> Cancel
+                    </button>
+                </div>
+
+                <div class="search-box">
+                    <i class="fas fa-search"></i>
+                    <input type="text" id="trainerSearch" placeholder="Search trainers by name or specialty..." oninput="showTrainers()">
+                </div>
+
+                <div class="table-wrap">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Name</th>
+                                <th>Phone</th>
+                                <th>Specialty</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="trainersList"></tbody>
+                    </table>
+                </div>
+
+            </section>
+        </main>
+
+    </div>
+
+    <script>
+        var editIndex = -1;
+
+        function getData(key) {
+            var data = localStorage.getItem(key);
+            if (data === null) return [];
+            return JSON.parse(data);
+        }
+
+        function saveData(key, value) {
+            localStorage.setItem(key, JSON.stringify(value));
+        }
+
+        function escapeHTML(str) {
+            return String(str)
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#39;");
+        }
+
+        function showToast(message, type) {
+            type = type || "success";
+            var toast = document.getElementById("gymToast");
+            if (!toast) {
+                toast = document.createElement("div");
+                toast.id = "gymToast";
+                document.body.appendChild(toast);
+            }
+            var icon = type === "success" ? "fa-circle-check" : "fa-circle-exclamation";
+            toast.className = "toast " + type;
+            toast.innerHTML = '<i class="fas ' + icon + '"></i><span>' + escapeHTML(message) + '</span>';
+            setTimeout(function () { toast.classList.add("show"); }, 10);
+            setTimeout(function () { toast.classList.remove("show"); }, 2800);
+        }
+
+        function openConfirm(message, onConfirm) {
+            var overlay = document.getElementById("gymModal");
+            if (!overlay) {
+                overlay = document.createElement("div");
+                overlay.id = "gymModal";
+                overlay.className = "modal-overlay";
+                overlay.innerHTML =
+                    '<div class="modal">' +
+                        '<i class="fas fa-triangle-exclamation"></i>' +
+                        '<h3>Are you sure?</h3>' +
+                        '<p id="gymModalMsg"></p>' +
+                        '<div class="modal-actions">' +
+                            '<button type="button" class="btn-cancel" id="gymCancel">Cancel</button>' +
+                            '<button type="button" class="btn-delete" id="gymConfirm">Delete</button>' +
+                        '</div>' +
+                    '</div>';
+                document.body.appendChild(overlay);
+            }
+            document.getElementById("gymModalMsg").innerText = message;
+            overlay.classList.add("show");
+            document.getElementById("gymCancel").onclick = function () {
+                overlay.classList.remove("show");
+            };
+            document.getElementById("gymConfirm").onclick = function () {
+                overlay.classList.remove("show");
+                onConfirm();
+            };
+        }
+
+        function loadUserInfo() {
+            var user = localStorage.getItem("gymUser");
+            if (!user) return;
+            var nameEl = document.getElementById("userName");
+            var avatarEl = document.getElementById("userAvatar");
+            if (nameEl) nameEl.innerText = user;
+            if (avatarEl) avatarEl.innerText = user.charAt(0).toUpperCase();
+        }
+
+        function addTrainer() {
+            var name = document.getElementById("trainerName").value.trim();
+            var phone = document.getElementById("trainerPhone").value.trim();
+            var specialty = document.getElementById("trainerSpecialty").value.trim();
+
+            if (name === "" || phone === "" || specialty === "") {
+                showToast("Please fill all fields", "error");
+                return;
+            }
+
+            var trainers = getData("gymTrainers");
+
+            if (editIndex === -1) {
+                trainers.push({ name: name, phone: phone, specialty: specialty });
+                showToast("Trainer added successfully", "success");
+            } else {
+                trainers[editIndex] = { name: name, phone: phone, specialty: specialty };
+                showToast("Trainer updated successfully", "success");
+                editIndex = -1;
+            }
+
+            saveData("gymTrainers", trainers);
+            clearForm();
+            showTrainers();
+        }
+
+        function editTrainer(index) {
+            var trainers = getData("gymTrainers");
+            var t = trainers[index];
+
+            document.getElementById("trainerName").value = t.name;
+            document.getElementById("trainerPhone").value = t.phone;
+            document.getElementById("trainerSpecialty").value = t.specialty;
+
+            document.getElementById("formTitle").innerHTML = '<i class="fas fa-user-pen"></i> Edit Trainer';
+            document.getElementById("submitBtn").innerHTML = '<i class="fas fa-check"></i> Update Trainer';
+            document.getElementById("submitBtn").className = "btn-update";
+            document.getElementById("cancelBtn").style.display = "inline-flex";
+
+            editIndex = index;
+            window.scrollTo({ top: 0, behavior: "smooth" });
+        }
+
+        function cancelEdit() {
+            editIndex = -1;
+            clearForm();
+            showToast("Edit cancelled", "error");
+        }
+
+        function clearForm() {
+            document.getElementById("trainerName").value = "";
+            document.getElementById("trainerPhone").value = "";
+            document.getElementById("trainerSpecialty").value = "";
+
+            document.getElementById("formTitle").innerHTML = '<i class="fas fa-user-plus"></i> Add New Trainer';
+            document.getElementById("submitBtn").innerHTML = '<i class="fas fa-plus"></i> Add Trainer';
+            document.getElementById("submitBtn").className = "";
+            document.getElementById("cancelBtn").style.display = "none";
+        }
+
+        function deleteTrainer(index) {
+            openConfirm("This trainer will be permanently removed.", function () {
+                var trainers = getData("gymTrainers");
+                trainers.splice(index, 1);
+                saveData("gymTrainers", trainers);
+                showToast("Trainer deleted", "success");
+
+                if (editIndex === index) {
+                    cancelEdit();
+                } else if (editIndex > index) {
+                    editIndex--;
+                }
+
+                showTrainers();
+            });
+        }
+
+        function showTrainers() {
+            var list = document.getElementById("trainersList");
+            var trainers = getData("gymTrainers");
+            var search = document.getElementById("trainerSearch").value.toLowerCase();
+
+            var filtered = [];
+            for (var i = 0; i < trainers.length; i++) {
+                var t = trainers[i];
+                if (t.name.toLowerCase().indexOf(search) !== -1 ||
+                    t.specialty.toLowerCase().indexOf(search) !== -1) {
+                    filtered.push({ trainer: t, originalIndex: i });
+                }
+            }
+
+            document.getElementById("trainerCount").innerText = trainers.length + " Trainers";
+            list.innerHTML = "";
+
+            if (filtered.length === 0) {
+                list.innerHTML = '<tr><td colspan="5">' +
+                    '<div class="empty-state">' +
+                    '<i class="fas fa-user-tie"></i>' +
+                    '<h4>' + (trainers.length === 0 ? 'No trainers yet' : 'No results found') + '</h4>' +
+                    '<p>' + (trainers.length === 0 ? 'Add your first trainer using the form above.' : 'Try a different search term.') + '</p>' +
+                    '</div></td></tr>';
+                return;
+            }
+
+            for (var j = 0; j < filtered.length; j++) {
+                var item = filtered[j];
+                var t2 = item.trainer;
+                var row = document.createElement("tr");
+                row.innerHTML =
+                    "<td>" + (j + 1) + "</td>" +
+                    "<td><strong>" + escapeHTML(t2.name) + "</strong></td>" +
+                    "<td>" + escapeHTML(t2.phone) + "</td>" +
+                    "<td><span class='tag'>" + escapeHTML(t2.specialty) + "</span></td>" +
+                    "<td><div class='action-cell'>" +
+                    "<button class='edit-btn' onclick='editTrainer(" + item.originalIndex + ")'>" +
+                    "<i class='fas fa-pen'></i> Edit</button>" +
+                    "<button class='delete-btn' onclick='deleteTrainer(" + item.originalIndex + ")'>" +
+                    "<i class='fas fa-trash'></i> Delete</button>" +
+                    "</div></td>";
+                list.appendChild(row);
+            }
+        }
+
+        loadUserInfo();
+        showTrainers();
+    </script>
+
+</body>
+
+</html>

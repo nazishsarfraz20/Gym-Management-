@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GymFlow - Login</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+
+<body>
+
+    <div class="login-container">
+        <div class="login-box">
+
+            <h1>GymFlow</h1>
+            <p class="subtitle">Smart Gym Management System</p>
+
+            <div class="input-group">
+                <label for="username">Username</label>
+                <input type="text" id="username" placeholder="Enter your username">
+            </div>
+
+            <div class="input-group">
+                <label for="password">Password</label>
+                <input type="password" id="password" placeholder="Enter your password">
+            </div>
+
+            <button type="button" onclick="handleLogin()">Login</button>
+
+            <p style="text-align:center; margin-top:15px;">
+                <a href="index.html" style="color:#94a3b8; font-size:14px;">Back to Home</a>
+            </p>
+
+        </div>
+    </div>
+
+    <script>
+        function handleLogin() {
+            var username = document.getElementById("username").value;
+            var password = document.getElementById("password").value;
+
+            if (username === "" || password === "") {
+                alert("Please enter Username and Password");
+                return;
+            }
+
+            localStorage.setItem("gymUser", username);
+            window.location.href = "pages/dashboard.html";
+        }
+    </script>
+
+</body>
+
+</html>

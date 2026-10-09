@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GymFlow - Reports</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="../css/style.css">
+</head>
+
+<body>
+
+    <div class="app">
+
+        <aside class="sidebar">
+            <h2 class="logo"><i class="fas fa-dumbbell"></i>GymFlow</h2>
+            <nav class="menu">
+                <a href="dashboard.html"><i class="fas fa-gauge-high"></i><span>Dashboard</span></a>
+                <a href="members.html"><i class="fas fa-users"></i><span>Members</span></a>
+                <a href="trainers.html"><i class="fas fa-user-tie"></i><span>Trainers</span></a>
+                <a href="plans.html"><i class="fas fa-clipboard-list"></i><span>Plans</span></a>
+                <a href="payments.html"><i class="fas fa-money-bill-wave"></i><span>Payments</span></a>
+                <a href="attendance.html"><i class="fas fa-calendar-check"></i><span>Attendance</span></a>
+                <a href="reports.html" class="active"><i class="fas fa-chart-bar"></i><span>Reports</span></a>
+            </nav>
+        </aside>
+
+        <main class="main">
+            <header class="topbar">
+                <h3>Reports</h3>
+                <div class="topbar-right">
+                    <div class="user-info">
+                        <div class="user-avatar" id="userAvatar">A</div>
+                        <span class="user-name" id="userName">Admin</span>
+                    </div>
+                    <a href="../login.html" class="logout-btn"><i class="fas fa-right-from-bracket"></i>Logout</a>
+                </div>
+            </header>
+
+            <section class="content">
+
+                <div class="page-header">
+                    <div>
+                        <h1>Gym Reports</h1>
+                        <p>A complete overview of your gym's performance.</p>
+                    </div>
+                </div>
+
+                <div class="cards">
+                    <div class="card">
+                        <div class="card-icon"><i class="fas fa-users"></i></div>
+                        <h4>Total Members</h4>
+                        <span id="rMembers">0</span>
+                    </div>
+                    <div class="card">
+                        <div class="card-icon"><i class="fas fa-user-tie"></i></div>
+                        <h4>Total Trainers</h4>
+                        <span id="rTrainers">0</span>
+                    </div>
+                    <div class="card">
+                        <div class="card-icon"><i class="fas fa-calendar-check"></i></div>
+                        <h4>Total Attendance</h4>
+                        <span id="rAttendance">0</span>
+                    </div>
+                    <div class="card">
+                        <div class="card-icon"><i class="fas fa-money-bill-wave"></i></div>
+                        <h4>Total Income</h4>
+                        <span id="rIncome">Rs 0</span>
+                    </div>
+                </div>
+
+                <div class="section-head">
+                    <h2>Member-wise Summary</h2>
+                </div>
+
+                <div class="table-wrap">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Member Name</th>
+                                <th>Phone</th>
+                                <th>Plan</th>
+                                <th>Total Paid</th>
+                                <th>Total Visits</th>
+                            </tr>
+                        </thead>
+                        <tbody id="reportList"></tbody>
+                    </table>
+                </div>
+
+            </section>
+        </main>
+
+    </div>
+
+    <script>
+        function getData(key) {
+            var data = localStorage.getItem(key);
+            if (data === null) return [];
+            return JSON.parse(data);
+        }
+
+        function escapeHTML(str) {
+            return String(str)
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#39;");
+        }
+
+        function loadUserInfo() {
+            var user = localStorage.getItem("gymUser");
+            if (!user) return;
+            var nameEl = document.getElementById("userName");
+            var avatarEl = document.getElementById("userAvatar");
+            if (nameEl) nameEl.innerText = user;
+            if (avatarEl) avatarEl.innerText = user.charAt(0).toUpperCase();
+        }
+
+        var members = getData("gymMembers");
+        var trainers = getData("gymTrainers");
+        var attendance = getData("gymAttendance");
+        var payments = getData("gymPayments");
+
+        document.getElementById("rMembers").innerText = members.length;
+        document.getElementById("rTrainers").innerText = trainers.length;
+        document.getElementById("rAttendance").innerText = attendance.length;
+
+        var totalIncome = 0;
+        for (var i = 0; i < payments.length; i++) {
+            totalIncome = totalIncome + Number(payments[i].amount);
+        }
+        document.getElementById("rIncome").innerText = "Rs " + totalIncome;
+
+        var list = document.getElementById("reportList");
+        list.innerHTML = "";
+
+        if (members.length === 0) {
+            list.innerHTML = '<tr><td colspan="6">' +
+                '<div class="empty-state">' +
+                '<i class="fas fa-chart-bar"></i>' +
+                '<h4>No data to show</h4>' +
+                '<p>Add members first to see the report.</p>' +
+                '</div></td></tr>';
+        } else {
+            for (var j = 0; j < members.length; j++) {
+                var m = members[j];
+
+                var paid = 0;
+                for (var k = 0; k < payments.length; k++) {
+                    if (payments[k].member === m.name) {
+                        paid = paid + Number(payments[k].amount);
+                    }
+                }
+
+                var visits = 0;
+                for (var x = 0; x < attendance.length; x++) {
+                    if (attendance[x].member === m.name) {
+                        visits++;
+                    }
+                }
+
+                var row = document.createElement("tr");
+                row.innerHTML =
+                    "<td>" + (j + 1) + "</td>" +
+                    "<td><strong>" + escapeHTML(m.name) + "</strong></td>" +
+                    "<td>" + escapeHTML(m.phone) + "</td>" +
+                    "<td><span class='tag'>" + escapeHTML(m.plan) + "</span></td>" +
+                    "<td>Rs " + paid + "</td>" +
+                    "<td>" + visits + "</td>";
+                list.appendChild(row);
+            }
+        }
+
+        loadUserInfo();
+    </script>
+
+</body>
+
+</html>
